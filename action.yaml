@@ -114,7 +114,7 @@ runs:
         set -e
         status_rejected_check=$(grep 'status rejected' reliza_command | wc -l)
         echo "statusCheck: $status_rejected_check"
-        if [ "$status_rejected_check" != "0" ]
+        if [[ "$status_rejected_check" != "0" ]]
         then
           echo "Failing build since Reliza build Status is rejected"
           exit 1
