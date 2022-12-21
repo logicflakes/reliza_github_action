@@ -48,8 +48,6 @@ runs:
     - name: Get Version
       shell: bash
       run: |
-        set -x
-        set -e
         reliza_ver=$(docker run --rm relizaio/reliza-cli getversion -k ${{ inputs.reliza_api_key }} -i ${{ inputs.reliza_api_id }} -u ${{ inputs.reliza_api_url }} -b ${{github.ref_name}} --metadata GitHub)
         echo "completed getting ver"
         echo $reliza_ver
@@ -112,8 +110,10 @@ runs:
     - name: Fail build if reliza status is rejected
       shell: bash
       run: |
+        set -x
+        set -e
         status_rejected_check=$(grep 'status rejected' reliza_command | wc -l)
-        echo "statusCheck: " $status_rejected_check
+        echo "statusCheck: $status_rejected_check"
         if [ "$status_rejected_check" != "0" ]
         then
           echo "Failing build since Reliza build Status is rejected"
