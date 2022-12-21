@@ -98,7 +98,7 @@ runs:
         echo -n "--artbuilduri https://github.com/${{github.repository}}/actions/runs/${{github.run_id}} " >> reliza_command
         echo -n "--artcimeta GitHub Actions " >> reliza_command
         echo -n "--arttype Docker " >> reliza_command
-        if [ $DOCKER_SHA_256 != "" ]
+        if [[ $DOCKER_SHA_256 != "" ]]
         then
           echo -n "--artdigests $DOCKER_SHA_256 " >> reliza_command
         fi
