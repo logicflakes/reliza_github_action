@@ -1,0 +1,97 @@
+name: 'RelizaHub Sumbit Build And Submit Release metadata action'
+description: 'Greet someone'
+inputs:
+  registry_username:
+    description: "Username for image registry"
+    required: true
+  registry_password:
+    description: "Password for image registry"
+    required: true
+  registry_host:
+    description: "Host for image registry"
+    required: true
+  reliza_api_id:
+    description: "Reliza Hub API ID"
+    required: true
+  reliza_api_key:
+    description: "Reliza Hub API KEY"
+    required: true
+  reliza_api_url:
+    description: "Reliza Hub API URL"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Record build start 
+      run: echo "BUILD_START=$(date -Iseconds)" >> $GITHUB_ENV
+      shell: bash
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 200
+    - name: Docker Setup Buildx
+      # You may pin to the exact commit or the version.
+      # uses: docker/setup-buildx-action@8c0edbc76e98fa90f69d9a2c020dcb50019dc325
+      uses: docker/setup-buildx-action@v2.2.1
+    - name: Login to Docker Registry
+      uses: docker/login-action@v2.1.0
+      with:
+        registry: ${{inputs.registry_host}}
+        username: ${{inputs.registry_username}}
+        password: ${{inputs.registry_password}}
+    - name: Get Version
+      shell: bash
+      run: |
+        set -x
+        set -e
+        reliza_ver=$(docker run --rm relizaio/reliza-cli getversion -k ${{ inputs.reliza_api_key }} -i ${{ inputs.reliza_api_id }} -u ${{ inputs.reliza_api_url }} -b $GITHUB_REF --metadata GitHub)
+        echo "completed getting ver"
+        echo $reliza_ver
+        echo "RLZ_VER_JSON=$reliza_ver" >> $GITHUB_ENV
+    - name: Extract Actual Version From JSON
+      run: |
+        full_ver=$(echo $RLZ_VER_JSON | jq -r ".version")
+        # version without meta for docker registry
+        short_ver=$(echo $RLZ_VER_JSON | jq -r ".dockerTagSafeVersion")
+        echo "RLZ_FULL_VER=$full_ver" >> $GITHUB_ENV
+        echo "RLZ_SHORT_VER=$short_ver" >> $GITHUB_ENV
+    - name: Instantiate Reliza status as Rejected to handle possible build failure
+      run: echo "--status rejected " > reliza_command
+    - name: Extract Last Release Commit And Prepare List Of Commits
+      run: |
+        last_commit=$(docker run --rm relizaio/reliza-cli getlatestrelease -i ${{ inputs.reliza_api_id }} -k ${{ inputs.reliza_api_key }} -u ${{ inputs.reliza_api_url }} --branch $GITHUB_REF | jq -r ".sourceCodeEntryDetails.commit")
+        if [ ! -z "$last_commit" ]
+        then
+          echo -n "--commits $(git log $last_commit..$GITHUB_SHA --date=iso-strict --pretty='%H|||%ad|||%s' | base64 -w 0) " >> reliza_command
+        fi    
+    - name: Submit metadata to Reliza Hub
+      run: |
+        echo -n "-b $GITHUB_REF --vcstype git --commit $GITHUB_SHA -k ${{ inputs.reliza_api_key }} \
+          --commitmessage \"$(git log -1 --pretty='%s')\" \
+          -i ${{ inputs.reliza_api_id }} -u ${{ inputs.reliza_api_url }} --vcsuri github.com/$GITHUB_REPOSITORY \
+          --date $(git log -1 --date=iso-strict --pretty='%ad') \
+          -v $RLZ_FULL_VER " >> reliza_command
+        echo -n "--artid $IMAGE_NAMESPACE/$IMAGE_NAME " >> reliza_command
+        echo -n "--artbuildid github$GITHUB_ACTION$GITHUB_SHA " >> reliza_command
+        echo -n "--artbuilduri https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID " >> reliza_command
+        echo -n "--artcimeta GitHub Actions " >> reliza_command
+        echo -n "--arttype Docker " >> reliza_command
+        if [ $DOCKER_SHA_256 != "" ]
+        then
+          echo -n "--artdigests $DOCKER_SHA_256 " >> reliza_command
+        fi
+        echo -n "--datestart $BUILD_START " >> reliza_command
+        echo -n "--dateend $(date -Iseconds) " >> reliza_command
+        # debug
+        cat reliza_command
+        # send data
+        echo docker run --rm relizaio/reliza-cli addrelease $(cat reliza_command) > rlz_cmd_exec
+        eval $(cat rlz_cmd_exec)
+    - name: Fail build if reliza status is rejected
+      run: |
+        status_rejected_check=$(grep 'status rejected' reliza_command | wc -l)
+        if [ "$status_rejected_check" != "0" ]
+        then
+          echo "Failing build since Reliza build Status is rejected"
+          exit 1
+        fi
