@@ -69,11 +69,11 @@ runs:
       shell: bash
       continue-on-error: true
       run: |
-        docker build -t $IMAGE_NAMESPACE/$IMAGE_NAME:$RLZ_SHORT_VER -t $IMAGE_NAMESPACE/$IMAGE_NAME:latest --build-arg VERSION=$RLZ_FULL_VER  \
+        docker build -t ${{inputs.image_namespace}}/${{inputs.image_name}}:$RLZ_SHORT_VER -t ${{inputs.image_namespace}}/${{inputs.image_name}}:latest --build-arg VERSION=$RLZ_FULL_VER  \
           --build-arg CI_ENV=github${{github.sha}} --build-arg GIT_COMMIT=${{github.sha}} --build-arg GIT_BRANCH=${{github.ref_name}} .
-        docker_sha_256=$(docker push $IMAGE_NAMESPACE/$IMAGE_NAME:$RLZ_SHORT_VER | grep sha256 | cut -f 3 -d ' ')
+        docker_sha_256=$(docker push ${{inputs.image_namespace}}/${{inputs.image_name}}:$RLZ_SHORT_VER | grep sha256 | cut -f 3 -d ' ')
         # push latest also
-        docker push $IMAGE_NAMESPACE/$IMAGE_NAME:latest
+        docker push ${{inputs.image_namespace}}/${{inputs.image_name}}:latest
         # save sha256 to env var
         echo "DOCKER_SHA_256=$docker_sha_256" >> $GITHUB_ENV
         echo "--status complete " > reliza_command
